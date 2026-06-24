@@ -1,0 +1,58 @@
+name: Rebuild simple index
+
+on:
+  # Triggered remotely from SuperModelingFactory_protected after a release.
+  repository_dispatch:
+    types: [smf_release_published]
+
+  # Manual trigger for debugging / first-time bootstrap.
+  workflow_dispatch:
+
+  # Belt-and-suspenders: nightly refresh in case dispatch was missed.
+  schedule:
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: rebuild-index
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build simple index
+        env:
+          GH_TOKEN: ${{ secrets.SMF_RELEASE_READ_TOKEN }}
+        run: |
+          python scripts/build_index.py \
+            --repo Kyle-J-Sun/SuperModelingFactory_protected \
+            --package supermodelingfactory \
+            --output-dir simple
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
